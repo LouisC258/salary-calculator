@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>全方位薪金增長計算器 Pro Max</title>
+    
+    <!-- PWA 及 手機版 Meta Tags -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="薪金計算">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .table-container::-webkit-scrollbar { height: 6px; }
+        .table-container::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .table-container::-webkit-scrollbar-track { background-color: transparent; }
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
+            background: #2563eb; cursor: pointer; margin-top: -6px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer; background: #e2e8f0; border-radius: 3px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        /* Accordion 過渡動畫 */
+        .accordion-content { transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out; max-height: 0; opacity: 0; overflow: hidden; }
+        .accordion-content.open { max-height: 1000px; opacity: 1; }
+        .accordion-icon { transition: transform 0.3s ease; }
+        .accordion-icon.open { transform: rotate(180deg); }
+
+        /* Tooltip 樣式 */
+        .tooltip-icon { cursor: help; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background-color: #cbd5e1; color: white; font-size: 10px; font-weight: bold; margin-left: 4px; }
+        .tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #1e293b; color: #fff; text-align: left; border-radius: 6px; padding: 8px 10px; position: absolute; z-index: 50; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.2s; font-size: 11px; font-weight: normal; line-height: 1.4; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); pointer-events: none;}
+        .tooltip .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1e293b transparent transparent transparent; }
+        .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-0 md:p-6 font-sans text-slate-800 antialiased pb-20 md:pb-6">
+
+    <div class="max-w-7xl mx-auto bg-white md:rounded-2xl shadow-2xl overflow-hidden min-h-screen md:min-h-0">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-700 via-indigo-600 to-purple-600 p-5 md:p-6 text-white text-center md:text-left flex flex-col md:flex-row justify-between items-center shadow-inner relative">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-extrabold tracking-wide drop-shadow-md">薪金增長儀表板 Pro Max 🚀</h1>
+                <p class="text-blue-100 mt-1 md:mt-2 text-xs md:text-sm font-medium">支援雙劇本對比、多重轉工、精準稅務計算</p>
+            </div>
+            <div class="hidden md:block mt-4 md:mt-0 bg-black/20 px-5 py-2.5 rounded-xl backdrop-blur-md border border-white/10 shadow-lg">
+                <span class="text-sm text-blue-100">目標進度：</span>
+                <span id="headerStatus" class="font-bold text-xl tracking-wide text-white/80" aria-live="polite">等待輸入...</span>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-0">
+            <!-- 左側：輸入控制區 -->
+            <div class="lg:col-span-4 p-4 md:p-6 bg-slate-50 lg:border-r border-b lg:border-b-0 border-slate-200 space-y-4 lg:max-h-[85vh] overflow-y-auto table-container">
+                
+                <!-- 1. 基本增長設定 (預設展開) -->
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800 border-b-2 border-blue-500 pb-2 mb-3">1. 基本增長設定 (Plan A)</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between mb-1 items-center">
+                                <label for="numCurrent" class="text-sm font-bold text-slate-700">現時月薪 ($)</label>
+                                <input type="number" id="numCurrent" value="0" min="0" class="w-24 text-right border-2 border-blue-200 rounded-lg px-2 py-1 text-sm font-bold text-blue-700 bg-white focus:border-blue-500 outline-none transition-colors">
+                            </div>
+                            <input type="range" id="slideCurrent" min="0" max="300000" step="500" value="0" aria-label="現時月薪拉桿">
+                            <p id="hintCurrent" class="text-[10px] text-blue-600 font-bold text-right h-3"></p>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between mb-1 items-center">
+                                <label for="numTarget" class="text-sm font-bold text-slate-700">目標月薪 ($)</label>
+                                <input type="number" id="numTarget" value="0" min="0" class="w-24 text-right border-2 border-blue-200 rounded-lg px-2 py-1 text-sm font-bold text-blue-700 bg-white focus:border-blue-500 outline-none transition-colors">
+                            </div>
+                            <input type="range" id="slideTarget" min="0" max="300000" step="1000" value="0" aria-label="目標月薪拉桿">
+                            <p id="hintTarget" class="text-[10px] text-blue-600 font-bold text-right h-3"></p>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between mb-1 items-center">
+                                <label for="numGrowth" class="text-sm font-bold text-slate-700">每年常規加薪 (%)</label>
+                                <input type="number" id="numGrowth" value="5" min="0" max="100" class="w-20 text-right border-2 border-blue-200 rounded-lg px-2 py-1 text-sm font-bold text-blue-700 bg-white focus:border-blue-500 outline-none transition-colors">
+                            </div>
+                            <input type="range" id="slideGrowth" min="0" max="30" step="0.5" value="5" aria-label="每年常規加薪拉桿">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 生涯事件 (Accordion) -->
+                <div class="border border-purple-100 bg-purple-50/30 rounded-xl overflow-hidden shadow-sm">
+                    <button class="w-full p-3 flex justify-between items-center bg-purple-100/50 hover:bg-purple-100 transition-colors" onclick="toggleAccordion('secHops', 'iconHops')">
+                        <span class="font-bold text-purple-800 text-sm">2. 生涯事件 (轉工/升職) Plan A</span>
+                        <svg id="iconHops" class="accordion-icon w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="secHops" class="accordion-content">
+                        <div class="p-4 space-y-3 border-t border-purple-100">
+                            <div id="hopsContainer" class="space-y-2 max-h-40 overflow-y-auto table-container"></div>
+                            <button id="btnAddHop" class="w-full py-2 border-2 border-dashed border-purple-300 rounded-lg text-purple-600 font-bold hover:bg-purple-100 transition-colors text-sm flex justify-center items-center gap-2">
+                                <span>+ 新增 Plan A 轉工 / 升職點</span>
+                            </button>
+                            <p class="text-[10px] text-purple-600 text-center">* 突發加薪將取代該年的常規加幅</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🌟 雙劇本對比模式 (Plan B) -->
+                <div class="border-2 border-orange-200 bg-orange-50 rounded-xl overflow-hidden shadow-sm relative">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>
+                    <div class="p-3 flex justify-between items-center border-b border-orange-100">
+                        <div class="flex items-center gap-2 tooltip">
+                            <span class="font-bold text-orange-800 text-sm">啟用對比模式 (Plan B)</span>
+                            <span class="tooltip-icon bg-orange-300">?</span>
+                            <span class="tooltip-text">想比較「留低」定「跳槽」好？開啟對比模式，設定另一條路線的加薪幅度及轉工點，圖表會即時比拼兩者財富差距。</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="togglePlanB" class="sr-only peer">
+                            <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                        </label>
+                    </div>
+                    <div id="secPlanB" class="accordion-content">
+                        <div class="p-4 space-y-4">
+                            <div>
+                                <div class="flex justify-between mb-1 items-center">
+                                    <label for="numGrowthB" class="text-sm font-bold text-orange-700">Plan B 常規加薪 (%)</label>
+                                    <input type="number" id="numGrowthB" value="3" min="0" max="100" class="w-20 text-right border-2 border-orange-200 rounded-lg px-2 py-1 text-sm font-bold text-orange-700 bg-white focus:border-orange-500 outline-none">
+                                </div>
+                                <input type="range" id="slideGrowthB" min="0" max="30" step="0.5" value="3">
+                            </div>
+                            <div class="pt-2 border-t border-orange-200">
+                                <label class="text-sm font-bold text-orange-700 block mb-2">Plan B 轉工事件</label>
+                                <div id="hopsContainerB" class="space-y-2 max-h-40 overflow-y-auto table-container mb-2"></div>
+                                <button id="btnAddHopB" class="w-full py-2 border-2 border-dashed border-orange-300 rounded-lg text-orange-600 font-bold hover:bg-orange-100 transition-colors text-sm flex justify-center items-center gap-2">
+                                    <span>+ 新增 Plan B 轉工點</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 稅務及財務設定 (Accordion) -->
+                <div class="border border-emerald-100 bg-emerald-50/30 rounded-xl overflow-hidden shadow-sm">
+                    <button class="w-full p-3 flex justify-between items-center bg-emerald-100/50 hover:bg-emerald-100 transition-colors" onclick="toggleAccordion('secTax', 'iconTax')">
+                        <span class="font-bold text-emerald-800 text-sm">3. 稅務、MPF 及其他設定</span>
+                        <svg id="iconTax" class="accordion-icon w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="secTax" class="accordion-content">
+                        <div class="p-4 space-y-4 border-t border-emerald-100">
+                            
+                            <!-- 出糧月數 -->
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <label for="numMonths" class="text-sm font-medium text-slate-700">每年出糧月數 (含雙糧/Bonus)</label>
+                                    <input type="number" id="numMonths" value="12" min="1" class="w-16 text-right border rounded px-1 text-sm font-bold text-slate-700">
+                                </div>
+                                <input type="range" id="slideMonths" min="12" max="18" step="0.5" value="12">
+                            </div>
+
+                            <!-- 通脹 -->
+                            <div>
+                                <div class="flex justify-between mb-1 tooltip">
+                                    <label for="numInflation" class="text-sm font-medium text-slate-700 flex items-center">預期年通脹率 (%) <span class="tooltip-icon">?</span>
+                                        <span class="tooltip-text">通脹會令金錢貶值。系統會以此利率扣減未來的購買力，計出「實質購買力」。</span>
+                                    </label>
+                                    <input type="number" id="numInflation" value="2.5" min="0" class="w-16 text-right border rounded px-1 text-sm font-bold text-red-600">
+                                </div>
+                                <input type="range" id="slideInflation" min="0" max="10" step="0.1" value="2.5">
+                            </div>
+
+                            <!-- 扣減開關 -->
+                            <div class="bg-white p-3 rounded-xl border border-emerald-100 shadow-sm space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm font-bold text-emerald-900">扣除強積金 (MPF)</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="toggleMPF" class="sr-only peer" checked>
+                                        <div class="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </label>
+                                </div>
+                                <div class="flex items-center justify-between tooltip">
+                                    <span class="text-sm font-bold text-emerald-900 flex items-center">計算香港薪俸稅 <span class="tooltip-icon">?</span>
+                                        <span class="tooltip-text">自動比較「累進稅率」及「標準稅率(15%)」，並已內置最高 $3,000 的稅款寬減計算。</span>
+                                    </span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="toggleTax" class="sr-only peer" checked>
+                                        <div class="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </label>
+                                </div>
+                                
+                                <div id="taxSettings" class="pt-2 border-t border-emerald-100 transition-all duration-300">
+                                    <label for="selMarital" class="block text-[11px] font-bold text-emerald-800 mb-1">婚姻狀況 (基本免稅額)</label>
+                                    <select id="selMarital" class="w-full border rounded px-2 py-1 text-xs font-medium text-emerald-700 bg-white focus:outline-none mb-2">
+                                        <option value="132000">單身 ($132,000)</option>
+                                        <option value="264000">已婚 ($264,000)</option>
+                                    </select>
+                                    
+                                    <div class="grid grid-cols-2 gap-2 mt-2">
+                                        <div><label class="block text-[10px] text-emerald-700">子女數目</label><input type="number" id="numChild" value="0" min="0" class="w-full border rounded px-1 py-1 text-xs font-bold text-emerald-700 text-center"></div>
+                                        <div><label class="block text-[10px] text-emerald-700">供養父母(總數)</label><input type="number" id="numParent" value="0" min="0" class="w-full border rounded px-1 py-1 text-xs font-bold text-emerald-700 text-center"></div>
+                                        <div><label class="block text-[10px] text-emerald-700">供樓/租金($)</label><input type="number" id="numHomeLoan" value="0" min="0" step="1000" class="w-full border rounded px-1 py-1 text-xs font-bold text-emerald-700 text-center"></div>
+                                        <div><label class="block text-[10px] text-emerald-700">進修/醫保/其他</label><input type="number" id="numOtherDeductions" value="0" min="0" step="1000" class="w-full border rounded px-1 py-1 text-xs font-bold text-emerald-700 text-center"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 約滿酬金 (Accordion) -->
+                <div class="border border-amber-100 bg-amber-50/30 rounded-xl overflow-hidden shadow-sm">
+                    <button class="w-full p-3 flex justify-between items-center bg-amber-100/50 hover:bg-amber-100 transition-colors" onclick="toggleAccordion('secGratuity', 'iconGrat')">
+                        <span class="font-bold text-amber-800 text-sm">4. 約滿酬金 (合約制專用)</span>
+                        <svg id="iconGrat" class="accordion-icon w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="secGratuity" class="accordion-content">
+                        <div class="p-4 space-y-3 border-t border-amber-100">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-bold text-amber-900">啟用約滿酬金</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="toggleGratuity" class="sr-only peer">
+                                    <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                                </label>
+                            </div>
+                            <div id="gratuitySettings" class="space-y-2 transition-all duration-300 opacity-50 pointer-events-none text-xs">
+                                <div class="flex justify-between items-center">
+                                    <label for="numContractYears" class="font-medium text-amber-800">合約年期 (年)</label>
+                                    <input type="number" id="numContractYears" value="2" min="1" class="w-12 text-center border rounded py-1 font-bold text-amber-700">
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <label for="numGratuityRate" class="font-medium text-amber-800">酬金比率 (%)</label>
+                                    <input type="number" id="numGratuityRate" value="15" min="0" class="w-12 text-right border rounded py-1 font-bold text-amber-700">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 右側：結果與圖表區 -->
+            <div class="lg:col-span-8 p-4 md:p-6 flex flex-col space-y-4 md:space-y-6 bg-white relative">
+                
+                <!-- 匯出與功能列 -->
+                <div class="flex justify-end gap-2 absolute top-4 right-4 md:top-6 md:right-6 z-10">
+                    <button onclick="downloadCSV()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded shadow-sm text-xs font-bold flex items-center gap-1 transition-colors">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> 匯出 CSV
+                    </button>
+                    <button onclick="downloadChart()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm text-xs font-bold flex items-center gap-1 transition-colors">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> 儲存圖表
+                    </button>
+                </div>
+
+                <!-- 摘要卡片 -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-8 md:pt-0">
+                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-3 md:p-4 rounded-xl md:rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
+                        <p class="text-[10px] md:text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Plan A 達標需時</p>
+                        <p id="resYearsA" class="text-xl md:text-3xl font-extrabold text-blue-900">-</p>
+                    </div>
+                    <div id="cardYearsB" class="bg-gradient-to-br from-orange-50 to-orange-100 p-3 md:p-4 rounded-xl md:rounded-2xl border border-orange-200 shadow-sm relative overflow-hidden hidden">
+                        <p class="text-[10px] md:text-xs text-orange-600 font-bold uppercase tracking-wider mb-1">Plan B 達標需時</p>
+                        <p id="resYearsB" class="text-xl md:text-3xl font-extrabold text-orange-900">-</p>
+                    </div>
+                    <div id="cardNetA" class="bg-gradient-to-br from-emerald-50 to-emerald-100 p-3 md:p-4 rounded-xl md:rounded-2xl border border-emerald-200 shadow-sm">
+                        <p class="text-[10px] md:text-xs text-emerald-600 font-bold uppercase tracking-wider mb-1 tooltip">稅後淨薪 (Plan A) <span class="tooltip-icon bg-emerald-300">?</span><span class="tooltip-text">扣除預計薪俸稅及 MPF 後，平均每個月真正落袋的現金。</span></p>
+                        <p id="resNetA" class="text-lg md:text-2xl font-bold text-emerald-900">-</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-3 md:p-4 rounded-xl md:rounded-2xl border border-purple-200 shadow-sm col-span-2 md:col-span-1">
+                        <p class="text-[10px] md:text-xs text-purple-600 font-bold uppercase tracking-wider mb-1 tooltip" id="diffTitle">10年總淨收入 (Plan A) <span class="tooltip-icon bg-purple-300">?</span><span class="tooltip-text">比較兩條發展路線在未來 10 年內，稅後累積真正賺到的總財富差距。</span></p>
+                        <p id="resDiff" class="text-lg md:text-2xl font-bold text-purple-900">-</p>
+                    </div>
+                </div>
+
+                <!-- 圖表區 -->
+                <div class="bg-white p-2 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 shadow-sm relative h-56 md:h-80 w-full">
+                    <canvas id="salaryChart" aria-label="薪金增長折線圖" role="img"></canvas>
+                </div>
+
+                <!-- 數據表 -->
+                <div class="table-container overflow-x-auto rounded-xl border border-slate-200 shadow-sm text-sm">
+                    <table class="w-full text-left border-collapse bg-white whitespace-nowrap min-w-[700px]">
+                        <thead class="bg-slate-50 border-b-2 border-slate-200">
+                            <tr>
+                                <th class="p-3 text-xs font-bold text-slate-500 uppercase">年份 / 事件</th>
+                                <th class="p-3 text-xs font-bold text-blue-700 uppercase text-right">A:帳面月薪</th>
+                                <th class="p-3 text-xs font-bold text-emerald-700 uppercase text-right bg-emerald-50/50">A:稅後淨薪</th>
+                                <th id="thNomB" class="p-3 text-xs font-bold text-orange-700 uppercase text-right hidden">B:帳面月薪</th>
+                                <th id="thNetB" class="p-3 text-xs font-bold text-red-700 uppercase text-right bg-red-50/50 hidden">B:稅後淨薪</th>
+                                <th class="p-3 text-xs font-bold text-amber-600 uppercase text-right tooltip">A:實質購買力 <span class="tooltip-icon">?</span><span class="tooltip-text">經通脹折現後的價值</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-100">
+                            <tr><td colspan="6" class="text-center p-6 text-slate-400 font-medium">請在左側輸入現時月薪及目標月薪以開始預測 🚀</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- 📱 手機版浮動摘要 Bar (Sticky Bar) -->
+    <div class="lg:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur border-t border-slate-200 p-3 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] z-50 flex justify-between items-center transition-transform duration-300">
+        <div class="text-xs leading-tight">
+            <div class="flex items-center gap-1">
+                <span class="text-slate-500 font-bold w-12">Plan A:</span>
+                <span id="stickyResA" class="font-extrabold text-blue-600 text-sm">-</span>
+            </div>
+            <div id="stickyRowB" class="flex items-center gap-1 mt-0.5 hidden">
+                <span class="text-slate-500 font-bold w-12">Plan B:</span>
+                <span id="stickyResB" class="font-extrabold text-orange-600 text-sm">-</span>
+            </div>
+        </div>
+        <button onclick="window.scrollTo({top:0, behavior:'smooth'})" class="bg-slate-100 border border-slate-300 text-slate-600 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm">
+            ▲ 回頂部
+        </button>
+    </div>
+
+    <script>
+        let salaryChart = null;
+        let exportDataRows = []; // 用於匯出 CSV
+
+        function formatMoney(amount) {
+            return '$' + Math.round(amount).toLocaleString('en-US');
+        }
+
+        // 摺疊面板控制
+        function toggleAccordion(contentId, iconId) {
+            const content = document.getElementById(contentId);
+            const icon = document.getElementById(iconId);
+            content.classList.toggle('open');
+            icon.classList.toggle('open');
+        }
+
+        // 同步所有拉桿與輸入框，並加入千位分隔提示
+        function syncInputs(slideId, numId, hintId = null) {
+            const slide = document.getElementById(slideId);
+            const num = document.getElementById(numId);
+            const hint = hintId ? document.getElementById(hintId) : null;
+            
+            const update = (val) => {
+                const parsed = parseFloat(val) || 0;
+                num.value = parsed;
+                slide.value = parsed;
+                if (hint) hint.innerText = parsed > 0 ? formatMoney(parsed) : '';
+                calculateAll();
+            };
+
+            slide.addEventListener('input', e => update(e.target.value));
+            num.addEventListener('input', e => update(e.target.value));
+        }
+
+        syncInputs('slideCurrent', 'numCurrent', 'hintCurrent');
+        syncInputs('slideTarget', 'numTarget', 'hintTarget');
+        syncInputs('slideGrowth', 'numGrowth');
+        syncInputs('slideGrowthB', 'numGrowthB');
+        syncInputs('slideMonths', 'numMonths');
+        syncInputs('slideInflation', 'numInflation');
+
+        // 多重轉工點 UI (Event Delegation)
+        function setupHops(containerId, btnId, prefix) {
+            const container = document.getElementById(containerId);
+            document.getElementById(btnId).addEventListener('click', () => {
+                const div = document.createElement('div');
+                div.className = `hop-row-${prefix} flex items-center justify-between gap-1 bg-white p-2 rounded border shadow-sm ${prefix==='A'?'border-purple-200':'border-orange-200'}`;
+                div.innerHTML = `
+                    <div class="flex items-center text-xs">第<input type="number" class="hop-year w-10 text-center border rounded mx-1 font-bold text-slate-800" min="1" placeholder="年">年</div>
+                    <div class="flex items-center text-xs">加幅<input type="number" class="hop-rate w-12 text-right border rounded mx-1 font-bold text-slate-800" placeholder="%">%</div>
+                    <button type="button" class="btn-delete text-red-400 hover:text-red-600 text-xs font-bold px-1">✕</button>
+                `;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+            });
+
+            container.addEventListener('input', (e) => { if (e.target.tagName === 'INPUT') calculateAll(); });
+            container.addEventListener('click', (e) => {
+                if (e.target.classList.contains('btn-delete')) {
+                    e.target.closest('div[class^="hop-row-"]').remove();
+                    calculateAll();
+                }
+            });
+        }
+        setupHops('hopsContainer', 'btnAddHop', 'A');
+        setupHops('hopsContainerB', 'btnAddHopB', 'B');
+
+        // 開關 UI 顯示控制
+        document.getElementById('togglePlanB').addEventListener('change', function(e) {
+            const sec = document.getElementById('secPlanB');
+            if(e.target.checked) sec.classList.add('open'); else sec.classList.remove('open');
+            document.getElementById('cardYearsB').style.display = e.target.checked ? 'block' : 'none';
+            document.getElementById('thNomB').style.display = e.target.checked ? 'table-cell' : 'none';
+            document.getElementById('thNetB').style.display = e.target.checked ? 'table-cell' : 'none';
+            document.getElementById('stickyRowB').style.display = e.target.checked ? 'flex' : 'none';
+            calculateAll();
+        });
+        document.getElementById('toggleGratuity').addEventListener('change', function(e) {
+            document.getElementById('gratuitySettings').style.opacity = e.target.checked ? '1' : '0.5';
+            document.getElementById('gratuitySettings').style.pointerEvents = e.target.checked ? 'auto' : 'none';
+            calculateAll();
+        });
+        document.getElementById('toggleTax').addEventListener('change', function(e) {
+            document.getElementById('taxSettings').style.opacity = e.target.checked ? '1' : '0.5';
+            document.getElementById('taxSettings').style.pointerEvents = e.target.checked ? 'auto' : 'none';
+            calculateAll();
+        });
+        
+        ['toggleMPF', 'selMarital', 'numChild', 'numParent', 'numHomeLoan', 'numOtherDeductions', 'numContractYears', 'numGratuityRate'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.addEventListener('input', calculateAll);
+        });
+
+        // 香港薪俸稅計算
+        function calculateHKTax(annualIncome, mpfDeduction, basicAllowance, otherDeductions) {
+            const netChargeable = Math.max(0, annualIncome - mpfDeduction - basicAllowance - otherDeductions);
+            let progressiveTax = 0; let remaining = netChargeable;
+            const brackets = [{ l: 50000, r: 0.02 }, { l: 50000, r: 0.06 }, { l: 50000, r: 0.10 }, { l: 50000, r: 0.14 }];
+            for (let b of brackets) {
+                if (remaining > 0) { let step = Math.min(remaining, b.l); progressiveTax += step * b.r; remaining -= step; }
+            }
+            if (remaining > 0) progressiveTax += remaining * 0.17;
+            let standardTax = Math.max(0, annualIncome - mpfDeduction) * 0.15;
+            
+            progressiveTax = Math.max(0, progressiveTax - Math.min(progressiveTax, 3000));
+            standardTax = Math.max(0, standardTax - Math.min(standardTax, 3000));
+            return Math.min(progressiveTax, standardTax);
+        }
+
+        // 核心模擬引擎 (獨立成函數方便跑多個 Plan)
+        function simulatePath(config, hopsSelector) {
+            const { s0, target, baseGrowth, months, inflation, gratEnabled, contractYrs, gratRate, deductMPF, calcTax, maritalAllowance, totalOtherDeductions } = config;
+            
+            const hops = {};
+            document.querySelectorAll(hopsSelector).forEach(row => {
+                const y = parseInt(row.querySelector('.hop-year').value);
+                const r = parseFloat(row.querySelector('.hop-rate').value) / 100;
+                if (!isNaN(y) && !isNaN(r) && y > 0) hops[y] = r;
+            });
+            const jumpIndices = Object.keys(hops).map(Number);
+
+            let exactYears = Infinity; let roundedYears = 0;
+            if (s0 >= target) { exactYears = 0; roundedYears = 0; } 
+            else if (baseGrowth > 0 || jumpIndices.length > 0) {
+                let curr = s0, prev = s0, yr = 0;
+                while (curr < target && yr < 40) {
+                    yr++; prev = curr;
+                    let r = hops[yr] !== undefined ? hops[yr] : baseGrowth;
+                    curr = curr * (1 + r);
+                }
+                if (curr >= target) {
+                    const diff = curr - prev;
+                    exactYears = (yr - 1) + (diff === 0 ? 0 : (target - prev) / diff);
+                    roundedYears = yr;
+                }
+            }
+
+            const data = []; let currentNominal = s0; let contractAccum = 0; let total10YNet = 0;
+            const maxYears = Math.max(10, exactYears === Infinity ? 5 : roundedYears + 1);
+
+            for (let year = 0; year <= maxYears; year++) {
+                let isJump = false; let jumpRate = 0;
+                if (year > 0) {
+                    let r = hops[year] !== undefined ? hops[year] : baseGrowth;
+                    if (hops[year] !== undefined) { isJump = true; jumpRate = r; }
+                    currentNominal = currentNominal * (1 + r);
+                    contractAccum += currentNominal * 12;
+                }
+
+                let annualNominal = currentNominal * months;
+                let isGrat = false;
+                if (year > 0 && gratEnabled && (year % contractYrs === 0)) {
+                    annualNominal += contractAccum * gratRate; contractAccum = 0; isGrat = true;
+                }
+                
+                let mpfMonthly = (deductMPF && currentNominal >= 7100) ? Math.min(currentNominal * 0.05, 1500) : 0;
+                let annualTax = calcTax ? calculateHKTax(annualNominal, mpfMonthly * months, maritalAllowance, totalOtherDeductions) : 0;
+                let netAnnual = annualNominal - (mpfMonthly * months) - annualTax;
+                let netMonthly = netAnnual / months;
+                let realMonthly = currentNominal / Math.pow((1 + inflation), year);
+
+                if (year > 0 && year <= 10) total10YNet += netAnnual;
+
+                data.push({ year, nominal: currentNominal, net: netMonthly, real: realMonthly, isJump, jumpRate, isGrat, annualNominal });
+            }
+            return { exactYears, roundedYears, data, jumpIndices, total10YNet };
+        }
+
+        function calculateAll() {
+            const s0 = parseFloat(document.getElementById('numCurrent').value) || 0;
+            const target = parseFloat(document.getElementById('numTarget').value) || 0;
+            if (s0 <= 0 || target <= 0) return; // Wait for input
+
+            const configShared = {
+                s0, target,
+                months: parseFloat(document.getElementById('numMonths').value) || 12,
+                inflation: (parseFloat(document.getElementById('numInflation').value) || 0) / 100,
+                gratEnabled: document.getElementById('toggleGratuity').checked,
+                contractYrs: parseInt(document.getElementById('numContractYears').value) || 2,
+                gratRate: (parseFloat(document.getElementById('numGratuityRate').value) || 0) / 100,
+                deductMPF: document.getElementById('toggleMPF').checked,
+                calcTax: document.getElementById('toggleTax').checked,
+                maritalAllowance: parseFloat(document.getElementById('selMarital').value) || 132000,
+                totalOtherDeductions: (parseInt(document.getElementById('numChild').value) || 0) * 130000 + 
+                                      (parseInt(document.getElementById('numParent').value) || 0) * 50000 + 
+                                      Math.min(parseFloat(document.getElementById('numHomeLoan').value) || 0, 100000) + 
+                                      (parseFloat(document.getElementById('numOtherDeductions').value) || 0)
+            };
+
+            const planBEnabled = document.getElementById('togglePlanB').checked;
+            
+            // Run Simulations
+            const resA = simulatePath({ ...configShared, baseGrowth: (parseFloat(document.getElementById('numGrowth').value) || 0) / 100 }, '.hop-row-A');
+            const resB = planBEnabled ? simulatePath({ ...configShared, baseGrowth: (parseFloat(document.getElementById('numGrowthB').value) || 0) / 100 }, '.hop-row-B') : null;
+
+            // Update UI - Plan A
+            const fmtYears = y => y === Infinity ? "無法達標" : (y===0 ? "已達標" : `${y.toFixed(1)} <span class="text-sm font-normal">年</span>`);
+            document.getElementById('resYearsA').innerHTML = fmtYears(resA.exactYears);
+            document.getElementById('stickyResA').innerHTML = fmtYears(resA.exactYears);
+            document.getElementById('resNetA').textContent = formatMoney(resA.data[resA.roundedYears]?.net || 0);
+
+            // Update UI - Plan B / Compare
+            if (planBEnabled) {
+                document.getElementById('resYearsB').innerHTML = fmtYears(resB.exactYears);
+                document.getElementById('stickyResB').innerHTML = fmtYears(resB.exactYears);
+                
+                const diff = resB.total10YNet - resA.total10YNet;
+                document.getElementById('diffTitle').innerHTML = `10年淨收入差異 (B減A) <span class="tooltip-icon bg-purple-300">?</span><span class="tooltip-text">正數代表 Plan B 跑贏，負數代表留喺 Plan A 仲好。</span>`;
+                const diffElem = document.getElementById('resDiff');
+                diffElem.textContent = (diff > 0 ? '+' : '') + formatMoney(diff);
+                diffElem.className = `text-lg md:text-2xl font-bold ${diff > 0 ? 'text-orange-600' : (diff < 0 ? 'text-red-600' : 'text-slate-600')}`;
+            } else {
+                document.getElementById('diffTitle').innerHTML = `10年總淨收入 (Plan A) <span class="tooltip-icon bg-purple-300">?</span><span class="tooltip-text">未來 10 年內稅後落袋嘅總金額。開啟 Plan B 可作比拼。</span>`;
+                document.getElementById('resDiff').textContent = formatMoney(resA.total10YNet);
+                document.getElementById('resDiff').className = "text-lg md:text-2xl font-bold text-purple-900";
+            }
+
+            // Generate Table & CSV Data
+            let tableHTML = ''; exportDataRows = [];
+            const displayYears = Math.min(15, Math.max(resA.roundedYears, resB ? resB.roundedYears : 0) + 1);
+            
+            for (let i = 0; i <= displayYears; i++) {
+                const dA = resA.data[i]; const dB = resB ? resB.data[i] : null;
+                if(!dA) break;
+
+                let badgeA = (i === resA.roundedYears && i>0) ? `<span class="bg-blue-600 text-white px-1 rounded text-[9px] ml-1">A達標</span>` : '';
+                if(dA.isJump) badgeA += `<span class="bg-purple-500 text-white px-1 rounded text-[9px] ml-1">轉工A</span>`;
+                
+                let badgeB = '';
+                if(dB) {
+                    if(i === resB.roundedYears && i>0) badgeB += `<span class="bg-orange-500 text-white px-1 rounded text-[9px] ml-1">B達標</span>`;
+                    if(dB.isJump) badgeB += `<span class="bg-red-400 text-white px-1 rounded text-[9px] ml-1">轉工B</span>`;
+                }
+
+                tableHTML += `
+                    <tr class="hover:bg-slate-50 border-b border-slate-100 transition-colors">
+                        <td class="p-3 text-slate-700 font-medium">${i === 0 ? '現在' : `第 ${i} 年`} ${badgeA}${badgeB}</td>
+                        <td class="p-3 text-right text-blue-800 font-semibold">${formatMoney(dA.nominal)}</td>
+                        <td class="p-3 text-right text-emerald-700 bg-emerald-50/30">${formatMoney(dA.net)}</td>
+                        ${planBEnabled ? `
+                            <td class="p-3 text-right text-orange-800 font-semibold">${formatMoney(dB.nominal)}</td>
+                            <td class="p-3 text-right text-red-700 bg-red-50/30">${formatMoney(dB.net)}</td>
+                        ` : ''}
+                        <td class="p-3 text-right text-amber-700">${formatMoney(dA.real)}</td>
+                    </tr>
+                `;
+
+                // For CSV
+                let row = [i, dA.nominal, dA.net, dA.annualNominal];
+                if(planBEnabled) row.push(dB.nominal, dB.net, dB.annualNominal);
+                exportDataRows.push(row);
+            }
+            document.getElementById('tableBody').innerHTML = tableHTML;
+
+            // Chart Update
+            const labels = resA.data.slice(0, displayYears+1).map(d => d.year === 0 ? '現在' : `第${d.year}年`);
+            const targetLine = new Array(labels.length).fill(target);
+            
+            const datasets = [
+                { label: 'A: 帳面月薪', data: resA.data.map(d=>d.nominal), borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, fill: !planBEnabled, tension: 0.1, pointRadius: resA.data.map(d=>d.isJump?6:0), pointBackgroundColor: '#9333ea' },
+                { label: 'A: 稅後淨薪', data: resA.data.map(d=>d.net), borderColor: '#10b981', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: 0.1 }
+            ];
+
+            if(planBEnabled) {
+                datasets.push({ label: 'B: 帳面月薪', data: resB.data.map(d=>d.nominal), borderColor: '#f97316', backgroundColor: 'transparent', borderWidth: 2, tension: 0.1, pointRadius: resB.data.map(d=>d.isJump?6:0), pointBackgroundColor: '#ef4444' });
+                datasets.push({ label: 'B: 稅後淨薪', data: resB.data.map(d=>d.net), borderColor: '#ef4444', borderDash: [2, 2], borderWidth: 2, pointRadius: 0, tension: 0.1 });
+            }
+            datasets.push({ label: '目標月薪', data: targetLine, borderColor: '#ef4444', borderWidth: 1, borderDash: [4, 4], pointRadius: 0 });
+
+            if(salaryChart) salaryChart.destroy();
+            salaryChart = new Chart(document.getElementById('salaryChart'), {
+                type: 'line', data: { labels, datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { labels: { boxWidth: 10, font: { size: 10 } } } },
+                    scales: { y: { ticks: { callback: v => '$' + (v / 1000) + 'k' } }, x: { grid: { display: false } } }
+                }
+            });
+        }
+
+        // 匯出功能
+        function downloadCSV() {
+            if(exportDataRows.length === 0) return alert("請先輸入薪金資料進行計算");
+            const hasB = document.getElementById('togglePlanB').checked;
+            let csv = "\uFEFF年份,Plan A帳面月薪,Plan A稅後淨薪,Plan A總年薪";
+            if(hasB) csv += ",Plan B帳面月薪,Plan B稅後淨薪,Plan B總年薪";
+            csv += "\n" + exportDataRows.map(e => e.join(",")).join("\n");
+            
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+            a.download = "salary_projection.csv";
+            a.click();
+        }
+
+        function downloadChart() {
+            if(!salaryChart) return;
+            const a = document.createElement('a');
+            a.href = salaryChart.toBase64Image();
+            a.download = 'salary_chart.png';
+            a.click();
+        }
+
+        window.onload = () => { setTimeout(calculateAll, 100); };
+
+        // PWA Setup
+        (function initPWA() {
+            const manifestJSON = {
+                "name": "薪金增長計算器", "short_name": "薪金計算", "start_url": location.href, "display": "standalone",
+                "background_color": "#f8fafc", "theme_color": "#4f46e5",
+                "icons": [{"src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzRmNDZlNSI+PHBhdGggZD0iTTE5IDNINWMtMS4xIDAtMiAuOS0yIDJ2MTRjMCAxLjEuOSAyIDIgMmgxNGMxLjEgMCAyLS45IDItMlY1YzAtMS4xLS45LTItMi0yeiBNOSAxN0g3di03aDJ2N3ptNCAwaC0yVjdoMnYxMHptNCAwaC0ydi00aDJ2NHoiLz48L3N2Zz4=", "sizes": "192x192", "type": "image/svg+xml"}]
+            };
+            const link = document.createElement('link'); link.rel = 'manifest';
+            link.href = URL.createObjectURL(new Blob([JSON.stringify(manifestJSON)], { type: 'application/json' }));
+            document.head.appendChild(link);
+        })();
+    </script>
+</body>
+</html>
